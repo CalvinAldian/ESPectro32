@@ -11,42 +11,31 @@
 
 #define ALTITUDE 768 //Altitude where I live (change this to your altitude)
 
-SFE_BMP180 pressure; //Creating an object
-
-const char* userName = "calvin.aldian@gmail.com";
-const char* userPass = "9cb80760";
-const char* broker   = "mqtt.dioty.co";
-const char* outTopic = "/calvin.aldian@gmail.com/out";
-const char* outTopicT = "/calvin.aldian@gmail.com/outT";
-const char* outTopicA = "/calvin.aldian@gmail.com/outA";
-const char* ssid;
-const char* password;
-String buffer, name;
-const int BUFSIZE = 15;
-char buf[BUFSIZE];
-String clear = "clear" ; 
-char myStringChar[BUFSIZE];
-
-WiFiClient espClient;
-Preferences preferences;
+SFE_BMP180 pressure; //Creating an object for BMP180
+WiFiClient espClient; 
+Preferences preferences; 
 PubSubClient client(espClient);
-long currentTime, lastTime;
-int count =0;
-int threshold = 40;
-char messages[50];
-char messagesT[50];
-char messagesA[50];
-char SSID[50];
-char PASS[50];
-int data,trying,touch;
-float temp, alt;
-int addNow, length,i;
 
+const char* userName = "user.name";
+const char* userPass = "user.password";
+const char* broker   = "mqtt.dioty.co";
+const char* outTopic = "/topic/out";
+const char* outTopicT = "/topic/outT";
+const char* outTopicA = "/topic/outA";
+
+int threshold = 40; // threshold for capasitive touch
+char messages[50];  // buff to save phototransistor value
+char messagesT[50]; // buff to save temperature value
+char messagesA[50]; // buff to save humidity value
+int trying, touch, i;
+float temp, alt;
+
+//reconecting to broker
 void reconnect(){
   while(!client.connected()){
     Serial.print("\nconnected to ");
     Serial.println(broker);
-    if(client.connect("calvin",userName, userPass)){
+    if(client.connect("client_id",userName, userPass)){
       Serial.print("\nconnected to ");
       Serial.println(broker);
     }
@@ -57,15 +46,16 @@ void reconnect(){
   }
 }
 
+//setting up wif
 void wifiSetup(){
-   Serial.println(preferences.getString("SSID","not found"));
-   WiFi.begin(preferences.getString("SSID","not found").c_str(), preferences.getString("PASS","not found").c_str());
-
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        trying++;
-        if (trying >=10) break;
-    }
+  //trying to connect to wifi using SSID and Password that have been saved
+  WiFi.begin(preferences.getString("SSID","not found").c_str(), preferences.getString("PASS","not found").c_str()); 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    trying++;
+    if (trying >=10) break;
+  }
+  
   //Init WiFi as Station, start SmartConfig
   if (WiFi.status() != WL_CONNECTED){
     WiFi.mode(WIFI_AP_STA);
@@ -86,9 +76,8 @@ void wifiSetup(){
       delay(100);
       Serial.print("-");
     }
-    preferences.putString("SSID", WiFi.SSID());
-    preferences.putString("PASS", WiFi.psk());
-    Serial.print("connected to ");
+    preferences.putString("SSID", WiFi.SSID()); // save SSID to preferences
+    preferences.putString("PASS", WiFi.psk());  // save Password to preferences
   }
 }
 
@@ -105,8 +94,7 @@ void setup() {
       while (1);
     }
     preferences.begin("WIFI", false);
-    ESPectro32.begin();
-    
+    ESPectro32.begin();    
     wifiSetup();
     client.setServer(broker,1883);
 }
@@ -119,18 +107,18 @@ void loop() {
   Serial.print("You provided altitude: ");
   Serial.print(ALTITUDE);
   Serial.println(" meters");
-
+  // Getting temperature
   status = pressure.startTemperature();
   if (status != 0) {
     delay(status);
-
+    
     status = pressure.getTemperature(T);
     if (status != 0) {
       Serial.print("Temp: ");
       Serial.print(T, 1);
       temp = T;
       Serial.println(" deg C");
-
+      // Getting pressure
       status = pressure.startPressure(3);
 
       if (status != 0) {
@@ -160,10 +148,11 @@ void loop() {
         snprintf(messagesA, 75, "pressure = %f hPa", alt);
         Serial.print("Photo Transistor : ");
         Serial.println(messages);
-        client.publish(outTopic, messages);  
-        client.publish(outTopicT, messagesT);   
-        client.publish(outTopicA, messagesA); 
-        touch = touchRead(T4);
+        client.publish(outTopic, messages);   // publishing phototransistor data to MQTT
+        client.publish(outTopicT, messagesT); // publishing temperature data to MQTT   
+        client.publish(outTopicA, messagesA); // publishing humidity data to MQTT
+        touch = touchRead(T4);                // read capasitive touch value
+        // clean preferences and restart ESP32 if the condition meet
         while(touch<=threshold){
             delay(100);
             i++;
