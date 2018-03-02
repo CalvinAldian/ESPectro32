@@ -11,7 +11,6 @@ void coreTask( void * pvParameters ){
         Serial.println(taskMessage);
         delay(1000);
     }
- 
 }
  
 void setup() {
